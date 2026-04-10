@@ -1,169 +1,81 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DoomHub | Dashboard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body { background: #080808; color: #eee; font-family: 'Inter', sans-serif; }
-        .card { background: #111; border: 1px solid #1a1a1a; padding: 40px; border-radius: 24px; }
-        .input-box { background: #000; border: 1px solid #222; padding: 22px; border-radius: 16px; font-size: 1.25rem; width: 100%; outline: none; transition: 0.2s; color: white; }
-        .input-box:focus { border-color: #444; }
-        .custom-scroll::-webkit-scrollbar { width: 4px; }
-        .custom-scroll::-webkit-scrollbar-thumb { background: #222; border-radius: 10px; }
-    </style>
-</head>
-<body class="p-6 md:p-12">
-    <div class="max-w-7xl mx-auto flex flex-col min-h-[90vh]">
-        
-        <header class="flex justify-between items-end mb-12">
-            <div>
-                <h1 class="text-4xl font-bold tracking-tight uppercase">DoomHub Panel</h1>
-                <p class="text-zinc-600 mt-2 italic font-medium">Campaign Limit: 2 active tasks.</p>
-            </div>
-            <div class="text-zinc-700 font-mono text-sm hidden md:block uppercase">System Status: <span class="text-green-600 font-bold">Operational</span></div>
-        </header>
+import time
+import threading
+import requests
+import random
+from flask import Flask, request, jsonify, render_template
 
-        <div class="grid grid-cols-1 xl:grid-cols-2 gap-10 flex-grow">
-            <div class="card space-y-8">
-                <div>
-                    <label class="block text-zinc-600 mb-3 uppercase text-xs font-black tracking-widest">Instance Name (Kamp)</label>
-                    <input type="text" id="id" value="Kamp_1" class="input-box">
-                </div>
+app = Flask(__name__)
 
-                <div>
-                    <label class="block text-zinc-600 mb-3 uppercase text-xs font-black tracking-widest">Account Token</label>
-                    <div class="flex gap-4">
-                        <input type="password" id="token" placeholder="Paste token here" class="input-box flex-1">
-                        <button onclick="detect()" class="bg-zinc-800 text-white px-8 rounded-2xl font-bold hover:bg-zinc-700 transition uppercase">Detect</button>
-                    </div>
-                    <p id="user_display" class="mt-3 text-sm font-bold text-zinc-700 uppercase tracking-tight">Awaiting detection...</p>
-                </div>
+# Task storage
+tasks = {}
 
-                <div>
-                    <label class="block text-zinc-600 mb-3 uppercase text-xs font-black tracking-widest">Channel IDs (Separate by comma)</label>
-                    <input type="text" id="channels" placeholder="123456, 789012" class="input-box">
-                </div>
+# [span_3](start_span)ProxyScrape Premium HTTP Listesi[span_3](end_span)
+PREMIUM_PROXIES = [
+    "65.111.4.42:3129", "65.111.4.231:3129", "209.50.176.47:3129", "209.50.190.148:3129",
+    "65.111.13.240:3129", "216.26.233.38:3129", "216.26.237.3:3129", "209.50.170.113:3129",
+    "216.26.249.39:3129", "104.207.61.41:3129", "45.3.52.108:3129", "65.111.4.9:3129",
+    "104.207.59.148:3129", "209.50.164.249:3129", "216.26.253.9:3129", "217.181.90.16:3129",
+    "216.26.230.41:3129", "104.207.63.133:3129", "104.207.41.26:3129", "216.26.252.79:3129",
+    "216.26.242.129:3129", "104.167.19.219:3129", "45.3.38.73:3129", "65.111.24.212:3129",
+    "216.26.232.208:3129", "45.3.38.91:3129", "216.26.248.211:3129", "216.26.250.242:3129",
+    "216.26.248.46:3129", "104.207.61.253:3129", "209.50.160.59:3129", "65.111.31.253:3129"
+    # [span_4](start_span)Liste devam ediyor... Tümünü koda ekleyebilirsin[span_4](end_span)
+]
 
-                <div>
-                    <label class="block text-zinc-600 mb-3 uppercase text-xs font-black tracking-widest">Message Content</label>
-                    <textarea id="message" rows="4" class="input-box custom-scroll" placeholder="Your message here..."></textarea>
-                </div>
+def get_random_proxy():
+    [span_5](start_span)"""Listeden rastgele bir proxy objesi döndürür[span_5](end_span)."""
+    p = random.choice(PREMIUM_PROXIES)
+    return {
+        "http": f"http://{p}",
+        "https": f"http://{p}"
+    }
 
-                <div class="grid grid-cols-2 gap-6 bg-black/40 p-6 rounded-2xl">
-                    <div>
-                        <label class="block text-zinc-600 mb-2 uppercase text-xs font-bold">Delay (Sec)</label>
-                        <input type="number" id="interval" value="2" class="input-box text-center">
-                    </div>
-                    <div class="flex flex-col justify-center space-y-3">
-                        <label class="flex items-center gap-3 cursor-pointer group">
-                            <input type="checkbox" id="jitter" checked class="w-6 h-6 rounded bg-black border-zinc-800 checked:bg-white transition-all">
-                            <span class="text-sm font-medium group-hover:text-white transition-colors">Anti-Ban Jitter</span>
-                        </label>
-                        <label class="flex items-center gap-3 cursor-pointer group">
-                            <input type="checkbox" id="delete" class="w-6 h-6 rounded bg-black border-zinc-800 checked:bg-white transition-all">
-                            <span class="text-sm font-medium group-hover:text-white transition-colors">Auto-Delete</span>
-                        </label>
-                    </div>
-                </div>
+def get_discord_user(token):
+    [span_6](start_span)"""Token kontrolünü rastgele bir premium proxy ile yapar[span_6](end_span)."""
+    for _ in range(3): # 3 farklı proxy deneme hakkı
+        try:
+            proxy = get_random_proxy()
+            r = requests.get(
+                "https://discord.com/api/v9/users/@me",
+                headers={"Authorization": token.strip()},
+                proxies=proxy,
+                timeout=5
+            )
+            if r.status_code == 200:
+                return r.json()
+        except:
+            continue
+    return None
 
-                <div class="flex gap-6">
-                    <button onclick="api('start')" class="bg-white text-black font-black py-6 rounded-2xl flex-1 text-2xl hover:bg-zinc-200 transition-all transform active:scale-95 uppercase tracking-tighter">Start</button>
-                    <button onclick="api('stop')" class="bg-zinc-900 text-zinc-600 font-bold py-6 rounded-2xl flex-1 text-2xl border border-zinc-800 hover:text-red-500 hover:border-red-900/50 transition-all transform active:scale-95 uppercase tracking-tighter">Stop</button>
-                </div>
-            </div>
-
-            <div class="flex flex-col h-full">
-                <div class="card flex-1 flex flex-col min-h-[500px]">
-                    <div class="flex justify-between items-center mb-6">
-                        <h3 class="text-zinc-600 uppercase text-xs font-black tracking-widest">Activity Monitor</h3>
-                        <button onclick="document.getElementById('logs').innerHTML = ''" class="text-[10px] text-zinc-800 hover:text-zinc-500 font-bold uppercase tracking-widest">Clear Logs</button>
-                    </div>
-                    <div id="logs" class="flex-1 overflow-y-auto font-mono text-sm space-y-2 pr-2 text-zinc-500 custom-scroll">
-                        <div class="text-zinc-700">>> System ready. Please authenticate using your token.</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <footer class="mt-12 py-8 border-t border-zinc-900 text-center text-zinc-800 text-xs font-black tracking-[0.3em] uppercase">
-            © 2026 DoomHub and Tader - All Rights Reserved
-        </footer>
-    </div>
-
-    <script>
-        function log(msg, err = false) {
-            const div = document.createElement('div');
-            div.className = err ? 'text-red-500' : 'text-zinc-400';
-            div.innerHTML = `<span class="text-zinc-800 font-bold">[${new Date().toLocaleTimeString()}]</span> ${msg}`;
-            const logs = document.getElementById('logs');
-            logs.appendChild(div);
-            logs.scrollTop = logs.scrollHeight;
-        }
-
-        async function detect() {
-            const tokenInput = document.getElementById('token').value.trim();
-            const display = document.getElementById('user_display');
+def sender_thread(task_id, token, channels, message, interval, jitter, auto_delete):
+    channel_list = [c.strip() for c in channels.split(',') if c.strip()]
+    while tasks.get(task_id, False):
+        for ch_id in channel_list:
+            if not tasks.get(task_id): break
             
-            if(!tokenInput) return log("Error: No token provided.", true);
+            url = f"https://discord.com/api/v9/channels/{ch_id}/messages"
+            headers = {"Authorization": token.strip(), "Content-Type": "application/json"}
             
-            display.innerText = "Verifying with Premium Proxies...";
-            display.className = "mt-3 text-sm font-bold text-yellow-600 animate-pulse uppercase tracking-tight";
-            
-            try {
-                const res = await fetch('/api/validate', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ token: tokenInput })
-                });
-                const data = await res.json();
+            try:
+                # [span_7](start_span)Her mesajda farklı proxy kullanarak ban riskini minimize ederiz[span_7](end_span)
+                proxy = get_random_proxy()
+                r = requests.post(url, json={"content": message}, headers=headers, proxies=proxy, timeout=7)
                 
-                if(res.ok) {
-                    display.innerText = `Connected: ${data.username}`;
-                    display.className = "mt-3 text-sm font-bold text-green-500 uppercase tracking-tight";
-                    log(`Auth successful: Logged in as ${data.username}`);
-                } else {
-                    display.innerText = "Validation Failed (Check Proxy Auth)";
-                    display.className = "mt-3 text-sm font-bold text-red-500 uppercase tracking-tight";
-                    log("Auth failed. Ensure your IP is whitelisted on ProxyScrape.", true);
-                }
-            } catch (err) {
-                display.innerText = "Server Connection Error";
-                display.className = "mt-3 text-sm font-bold text-red-600 uppercase tracking-tight";
-                log("Fatal: Could not reach the backend server.", true);
-            }
-        }
+                if r.status_code == 200 and auto_delete:
+                    msg_id = r.json().get('id')
+                    time.sleep(1.5)
+                    requests.delete(f"{url}/{msg_id}", headers=headers, proxies=proxy)
+            except:
+                pass
 
-        async function api(type) {
-            const payload = {
-                id: document.getElementById('id').value,
-                token: document.getElementById('token').value.trim(),
-                channels: document.getElementById('channels').value,
-                message: document.getElementById('message').value,
-                interval: document.getElementById('interval').value,
-                jitter: document.getElementById('jitter').checked,
-                auto_delete: document.getElementById('delete').checked
-            };
+        wait = float(interval)
+        if jitter: wait += random.uniform(0.1, 1.5)
+        time.sleep(max(0.5, wait))
 
-            try {
-                const res = await fetch(`/api/${type}`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(payload)
-                });
-                const data = await res.json();
-                
-                if(res.ok) {
-                    const color = type === 'start' ? 'text-green-500' : 'text-zinc-500';
-                    log(`<span class="${color}">Action: ${type.toUpperCase()}</span> | Instance: ${payload.id}`);
-                } else {
-                    log(`System Error: ${data.message}`, true);
-                }
-            } catch (err) {
-                log("Error: Failed to communicate with automation engine.", true);
-            }
-        }
-    </script>
-</body>
-</html>
+# Flask Route'ları (Giriş, Dashboard, API) buraya eklenecek...
+# (Önceki kodlardaki @app.route kısımlarını aynen kullanabilirsin)
+
+if __name__ == '__main__':
+    import os
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
