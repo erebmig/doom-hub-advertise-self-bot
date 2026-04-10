@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DoomHub | Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background: #080808; color: #eee; font-family: 'Inter', sans-serif; }
+        .card { background: #111; border: 1px solid #1a1a1a; padding: 40px; border-radius: 24px; }
+        .input-box { background: #000; border: 1px solid #222; padding: 22px; border-radius: 16px; font-size: 1.25rem; width: 100%; outline: none; transition: 0.2s; color: white; }
+        .input-box:focus { border-color: #444; }
+    </style>
+</head>
+<body class="p-6 md:p-12">
+    <div class="max-w-7xl mx-auto flex flex-col min-h-[90vh]">
+        
+        <header class="flex justify-between items-end mb-12">
+            <div>
+                <h1 class="text-4xl font-bold tracking-tight">DOOMHUB PANEL</h1>
+                <p class="text-zinc-600 mt-2 italic font-medium">Campaign Limit: 2 active tasks.</p>
+            </div>
+            <div class="text-zinc-700 font-mono text-sm hidden md:block">STATUS: <span class="text-green-600 font-bold">OPERATIONAL</span></div>
+        </header>
+
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-10 flex-grow">
+            <div class="card space-y-8">
+                <div>
+                    <label class="block text-zinc-600 mb-3 uppercase text-xs font-black tracking-widest">Instance Name (Kamp)</label>
+                    <input type="text" id="id" value="Kamp_1" class="input-box">
+                </div>
+
+                <div>
+                    <label class="block text-zinc-600 mb-3 uppercase text-xs font-black tracking-widest">Account Token</label>
+                    <div class="flex gap-4">
+                        <input type="password" id="token" placeholder="Paste token here" class="input-box flex-1">
+                        <button onclick="detect()" class="bg-zinc-800 text-white px-8 rounded-2xl font-bold hover:bg-zinc-700 transition">DETECT</button>
+                    </div>
+                    <p id="user_display" class="mt-3 text-sm font-bold text-zinc-700 uppercase tracking-tight">Awaiting detection...</p>
+                </div>
+
+                <div>
+                    <label class="block text-zinc-600 mb-3 uppercase text-xs font-black tracking-widest">Channel IDs</label>
+                    <input type="text" id="channels" placeholder="123456, 789012" class="input-box">
+                </div>
+
+                <div>
+                    <label class="block text-zinc-600 mb-3 uppercase text-xs font-black tracking-widest">Message Content</label>
+                    <textarea id="message" rows="4" class="input-box" placeholder="Your message here..."></textarea>
+                </div>
+
+                <div class="grid grid-cols-2 gap-6 bg-black/40 p-6 rounded-2xl">
+                    <div>
+                        <label class="block text-zinc-600 mb-2 uppercase text-xs font-bold">Delay (Sec)</label>
+                        <input type="number" id="interval" value="2" class="input-box text-center">
+                    </div>
+                    <div class="flex flex-col justify-center space-y-3">
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="checkbox" id="jitter" checked class="w-6 h-6 rounded bg-black border-zinc-800">
+                            <span class="text-sm font-medium">Anti-Ban Jitter</span>
+                        </label>
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="checkbox" id="delete" class="w-6 h-6 rounded bg-black border-zinc-800">
+                            <span class="text-sm font-medium">Auto-Delete</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="flex gap-6">
+                    <button onclick="api('start')" class="bg-white text-black font-black py-6 rounded-2xl flex-1 text-2xl hover:bg-zinc-200 transition">START</button>
+                    <button onclick="api('stop')" class="bg-zinc-900 text-zinc-600 font-bold py-6 rounded-2xl flex-1 text-2xl border border-zinc-800 hover:text-red-500 transition">STOP</button>
+                </div>
+            </div>
+
+            <div class="flex flex-col h-full">
+                <div class="card flex-1 flex flex-col min-h-[500px]">
+                    <h3 class="text-zinc-600 uppercase text-xs font-black tracking-widest mb-6">Activity Monitor</h3>
+                    <div id="logs" class="flex-1 overflow-y-auto font-mono text-sm space-y-2 pr-2 text-zinc-500">
+                        <div>>> System ready. Connect a token to begin.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer class="mt-12 py-8 border-t border-zinc-900 text-center text-zinc-700 text-sm font-bold tracking-widest uppercase">
+            © 2026 DoomHub and Tader - All Rights Reserved
+        </footer>
+    </div>
+
+    <script>
+        function log(msg, err = false) {
+            const div = document.createElement('div');
+            div.className = err ? 'text-red-500' : 'text-zinc-300';
+            div.innerHTML = `<span class="text-zinc-800">[${new Date().toLocaleTimeString()}]</span> ${msg}`;
+            const logs = document.getElementById('logs');
+            logs.appendChild(div);
+            logs.scrollTop = logs.scrollHeight;
+        }
+
+        async function detect() {
+            const token = document.getElementById('token').value;
+            const display = document.getElementById('user_display');
+            if(!token) return log("Please enter a token.", true);
+            
+            display.innerText = "Processing...";
+            const res = await fetch('/api/validate', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ token })
+            });
+            const data = await res.json();
+            if(res.ok) {
+                display.innerText = `Connected: ${data.username}`;
+                display.className = "mt-3 text-sm font-bold text-green-600 uppercase tracking-tight";
+                log(`Successfully detected user: ${data.username}`);
+            } else {
+                display.innerText = "Validation failed.";
+                display.className = "mt-3 text-sm font-bold text-red-500 uppercase tracking-tight";
+                log("Invalid token entered.", true);
+            }
+        }
+
+        async function api(type) {
+            const payload = {
+                id: document.getElementById('id').value,
+                token: document.getElementById('token').value,
+                channels: document.getElementById('channels').value,
+                message: document.getElementById('message').value,
+                interval: document.getElementById('interval').value,
+                jitter: document.getElementById('jitter').checked,
+                auto_delete: document.getElementById('delete').checked
+            };
+
+            const res = await fetch(`/api/${type}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if(res.ok) {
+                log(`Action: ${type.toUpperCase()} | Instance: ${payload.id}`);
+            } else {
+                log(`Error: ${data.message}`, true);
+            }
+        }
+    </script>
+</body>
+</html>
+
